@@ -1,0 +1,75 @@
+.TH "elpa_solve_tridiagonal" 3 "Wed Aug 9 2023" "ELPA" \" -*- nroff -*-
+.ad l
+.nh
+.SH NAME
+elpa_solve_tridiagonal \- computes the eigenvalue problem for real symmetric tridiagonal matrix
+.br
+
+.SH SYNOPSIS
+.br
+.SS FORTRAN INTERFACE
+use elpa
+.br
+class(elpa_t), pointer :: elpa
+.br
+
+call elpa%\fBsolve_tridiagonal\fP (d, e, q, error)
+.sp
+With the definitions of the input and output variables:
+
+.TP
+class(elpa_t) :: \fB elpa\fP
+An instance of the ELPA object.
+.TP
+datatype :: \fB d\fP
+The diagonal elements of a matrix whose dimensions have been defined in\fB elpa_setup\fP(3).
+The dimensions of the matrix must be set\fI BEFORE\fP with\fB elpa_setup\fP(3).
+On exit the eigenvalues are stored in\fB d\fP.
+The\fB datatype\fP of the diagonal elements can either be "real(kind=c_double)" or "real(kind=c_float)".
+.TP
+datatype :: \fB e\fP
+The offdiagonal elements of the matrix.
+The\fB datatype\fP of the diagonal elements can either be "real(kind=c_double)" or "real(kind=c_float)".
+.TP
+datatype :: \fB q\fP
+The storage space for the computed eigenvectors.
+The\fB datatype\fP of the matrix can be either "real(kind=c_double)" or "real(kind=c_float)".
+.TP
+integer, optional :: \fB error\fP
+The return error code of the function. Should be "ELPA_OK". The error code can be queried with the function\fB elpa_strerr\fP(3)
+
+.br
+.SS C INTERFACE
+#include <elpa/elpa.h>
+.br
+elpa_t handle;
+
+.br
+void\fB elpa_solve_tridiagonal\fP(\fBelpa_t\fP handle,\fB datatype\fP *d,\fB datatype\fP *e,\fB datatype\fP *q,\fB int\fP *error);
+.sp
+With the definitions of the input and output variables:
+
+.TP
+elpa_t \fB handle\fP;
+The handle to the ELPA object
+.TP
+datatype \fB *d\fP;
+The diagonal elements of the matrix.
+The dimensions of the matrix must be set\fI BEFORE\fP with\fB elpa_setup\fP(3).
+On exit the eigenvalues are stored in\fB d\fP.
+The\fB datatype\fP can be one of "double" or "float".
+.TP
+datatype \fB *e\fP;
+The offdiagonal elements of the matrix. The\fB datatype\fP can be one of "double" or "float".
+.TP
+datatype \fB *q\fP;
+The storage space for the computed eigenvectors. The\fB datatype\fP can be one of "double" or "float".
+.TP
+int \fB *error\fP;
+The error code of the function. Should be "ELPA_OK". The error codes can be queried with\fB elpa_strerr\fP(3)
+
+.SH DESCRIPTION
+Computes the eigenvalue problem of a real symmetric tridiagonal matrix. The functions\fB elpa_init\fP(3),\fB elpa_allocate\fP(3),\fB elpa_set\fP(3), and\fB elpa_setup\fP(3) must be called\fI BEFORE\fP\fB elpa_solve_tridiagonal\fP can be called.
+
+.SH SEE ALSO
+\fBelpa2_print_kernels\fP(1)\fB elpa_init\fP(3)\fB elpa_allocate\fP(3)\fB elpa_set\fP(3)\fB elpa_setup\fP(3)\fB elpa_strerr\fP(3)\fB elpa_eigenvalues\fP(3)\fB elpa_cholesky\fP(3)\fB elpa_invert_triangular\fP(3)\fB elpa_hermitian_multiply\fP(3)\fB elpa_uninit\fP(3)\fB elpa_deallocate\fP(3)
