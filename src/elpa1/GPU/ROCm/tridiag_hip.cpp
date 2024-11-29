@@ -1007,8 +1007,6 @@ template <typename T>
 __global__ void hip_transpose_reduceadd_vectors_copy_block_kernel(T *aux_transpose_dev, T *vmat_st_dev, 
                                               int nvc, int nvr, int n_block, int nblks_skip, int nblks_tot, 
                                               int lcm_s_t, int nblk, int auxstride, int np_st, int ld_st, int direction, int isSkewsymmetric, int isReduceadd){
-  int tid_x = threadIdx.x + blockIdx.x*blockDim.x;
-
 /*
   ! direction = 1
   do lc=1,nvc
@@ -1035,26 +1033,35 @@ __global__ void hip_transpose_reduceadd_vectors_copy_block_kernel(T *aux_transpo
   enddo
 */
 
+
+  int tid_x = threadIdx.x + blockIdx.x*blockDim.x;
+  int tid_y = threadIdx.y + blockIdx.y*blockDim.y;
   T sign = elpaDeviceNumber<T>(1.0);
   if (isSkewsymmetric) sign = elpaDeviceNumber<T>(-1.0);
 
   int k, ns, nl;
+//  if(tid_x == 0) printf("nvc = %d, nvr = %d, n_block = %d, nblks_skip = %d, nblks_tot = %d, lcm_s_t = %d, nblk = %d, auxstride = %d, np_st = %d, ld_st = %d, direction = %d, isSkewsymmetric = %d, isReduceadd = %d \n", nvc, nvr, n_block, nblks_skip, nblks_tot, lcm_s_t, nblk, auxstride, np_st, ld_st, direction, isSkewsymmetric, isReduceadd);
   for (int lc=1; lc <= nvc; lc += 1)
     {
-    for (int i = nblks_skip+n_block; i <= nblks_tot-1; i += lcm_s_t)
-      {
-      k = (i - nblks_skip - n_block)/lcm_s_t * nblk + (lc - 1) * auxstride;
-      ns = (i/np_st)*nblk; // local start of block i
-      nl = MIN(nvr-i*nblk, nblk); // length
-      for (int j=tid_x; j<nl; j+=blockDim.x*gridDim.x) 
-        {
-        if (direction==1)                 aux_transpose_dev[k+1+j-1]            = vmat_st_dev[ns+1+j-1 + (lc-1)*ld_st];
-        if (direction==2 && !isReduceadd) vmat_st_dev[ns+1+j-1 + (lc-1)*ld_st]  = elpaDeviceMultiply(sign, aux_transpose_dev[k+1+j-1]);
-        if (direction==2 &&  isReduceadd) vmat_st_dev[ns+1+j-1 + (lc-1)*ld_st]  = elpaDeviceAdd(vmat_st_dev[ns+1+j-1 + (lc-1)*ld_st] , aux_transpose_dev[k+1+j-1]);
-        }
-      }
+//    for (int i = nblks_skip+n_block; i <= nblks_tot-1; i += lcm_s_t)
+      if(tid_y == nblks_skip+n_block || (tid_y > nblks_skip+n_block && (tid_y - nblks_skip - n_block) % lcm_s_t == 0) )
+	  {
+	  
+	  	for (int i = tid_y; i <= nblks_tot-1; i += blockDim.y*gridDim.y)
+      	{
+      		k = (i - nblks_skip - n_block)/lcm_s_t * nblk + (lc - 1) * auxstride;
+      		ns = (i/np_st)*nblk; // local start of block i
+      		nl = MIN(nvr-i*nblk, nblk); // length
+      		for (int j=tid_x; j<nl; j+=blockDim.x*gridDim.x) 
+        	{
+//  	  		printf("tid_x = %d, tid_y = %d, [ns+1+j-1 + (lc-1)*ld_st] = %d\n", tid_x, tid_y, ns+1+j-1 + (lc-1)*ld_st);
+        	if (direction==1)                 aux_transpose_dev[k+1+j-1]            = vmat_st_dev[ns+1+j-1 + (lc-1)*ld_st];
+        	if (direction==2 && !isReduceadd) vmat_st_dev[ns+1+j-1 + (lc-1)*ld_st]  = elpaDeviceMultiply(sign, aux_transpose_dev[k+1+j-1]);
+        	if (direction==2 &&  isReduceadd) vmat_st_dev[ns+1+j-1 + (lc-1)*ld_st]  = elpaDeviceAdd(vmat_st_dev[ns+1+j-1 + (lc-1)*ld_st] , aux_transpose_dev[k+1+j-1]);
+        	}
+      	}
+	  }
     }
-
 }
 
 template <typename T>
@@ -1081,18 +1088,19 @@ void hip_transpose_reduceadd_vectors_copy_block_FromC(T *aux_transpose_dev, T *v
   //int SM_count=32; // TODO_23_11 count and move outside
   int blocks = SM_count;
 
-  dim3 blocksPerGrid = dim3(blocks,1,1);
-  dim3 threadsPerBlock = dim3(nblk,1,1); 
-
+//  dim3 blocksPerGrid = dim3(blocks,1,1);
+//  dim3 threadsPerBlock = dim3(nblk,1,1); 
+  dim3 T_blocksPerGrid = dim3(blocks/2,blocks/2,1);
+  dim3 T_threadsPerBlock = dim3(nblk,MAX_THREADS_PER_BLOCK/nblk,1); 
   
 #ifdef WITH_GPU_STREAMS
-  hip_transpose_reduceadd_vectors_copy_block_kernel<<<blocks,threadsPerBlock,0,my_stream>>>(aux_transpose_dev, vmat_st_dev, 
+  hip_transpose_reduceadd_vectors_copy_block_kernel<<<T_blocksPerGrid,T_threadsPerBlock,0,my_stream>>>(aux_transpose_dev, vmat_st_dev, 
                           nvc, nvr, n_block, nblks_skip, nblks_tot, lcm_s_t, nblk, auxstride, np_st, ld_st, direction, isSkewsymmetric, isReduceadd);
 #else
   hip_transpose_reduceadd_vectors_copy_block_kernel<<<blocks,threadsPerBlock>>>(aux_transpose_dev, vmat_st_dev, 
                           nvc, nvr, n_block, nblks_skip, nblks_tot, lcm_s_t, nblk, auxstride, np_st, ld_st, direction, isSkewsymmetric, isReduceadd);
 #endif
-  if(wantDebug)
+//  if(wantDebug)
     {
     hipError_t hiperr = hipGetLastError();
     if (hiperr != hipSuccess) printf("Error in executing hip_transpose_reduceadd_vectors_copy_block_kernel: %s\n",hipGetErrorString(hiperr));
